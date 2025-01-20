@@ -240,15 +240,11 @@ func writeAttrLine(key string, value interface{}, parentName string, body *hclwr
 
 		ctyMap := make(map[string]cty.Value)
 		for _, v := range sortedKeys {
-			if hasNumber(v) {
-				ctyMap[fmt.Sprintf("%s", v)] = cty.StringVal(values[v].(string))
-			} else {
-				switch val := values[v].(type) {
-				case string:
-					ctyMap[v] = cty.StringVal(val)
-				case float64:
-					ctyMap[v] = cty.NumberFloatVal(val)
-				}
+			switch val := values[v].(type) {
+			case string:
+				ctyMap[v] = cty.StringVal(val)
+			case float64:
+				ctyMap[v] = cty.NumberFloatVal(val)
 			}
 		}
 		body.SetAttributeValue(key, cty.ObjectVal(ctyMap))
@@ -293,6 +289,8 @@ func writeAttrLine(key string, value interface{}, parentName string, body *hclwr
 				vals = append(vals, cty.StringVal(item))
 			}
 			body.SetAttributeValue(key, cty.ListVal(vals))
+		} else {
+			body.SetAttributeValue(key, cty.ListValEmpty(cty.String))
 		}
 	case string:
 		if parentName == "query" && key == "value" && value == "" {
@@ -311,4 +309,12 @@ func writeAttrLine(key string, value interface{}, parentName string, body *hclwr
 	default:
 		log.Debugf("got unknown attribute configuration: key %s, value %v, value type %T", key, value, value)
 	}
+}
+
+// boolToEnabledOrDisabled outputs a string representation of a boolean in the form of `enabled` or `disabled`.
+func boolToEnabledOrDisabled(value bool) string {
+	if value {
+		return "enabled"
+	}
+	return "disabled"
 }

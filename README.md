@@ -14,7 +14,8 @@ write the Terraform configuration to describe them.
 
 Read the [announcement blog](https://blog.cloudflare.com/cloudflares-partnership-with-hashicorp-and-bootstrapping-terraform-with-cf-terraforming/) for further details on using `cf-terraforming` in your workflow.
 
-> **Note** If you would like to export resources compatible with Terraform < 0.12.x,
+> [!NOTE]
+> If you would like to export resources compatible with Terraform < 0.12.x,
 > you will need to download an older release as this tool no longer supports it.
 
 ## Usage
@@ -24,23 +25,27 @@ Usage:
   cf-terraforming [command]
 
 Available Commands:
+  completion  Generate the autocompletion script for the specified shell
   generate    Fetch resources from the Cloudflare API and generate the respective Terraform stanzas
   help        Help about any command
   import      Output `terraform import` compatible commands in order to import resources into state
   version     Print the version number of cf-terraforming
 
 Flags:
-  -a, --account string                  Use specific account ID for commands
-  -c, --config string                   Path to configuration file (default is $HOME/.cf-terraforming.yaml)
-  -e, --email string                    API Email address associated with your account
-  -h, --help                            Help for cf-terraforming
-  -k, --key string                      API Key generated on the 'My Profile' page. See: https://dash.cloudflare.com/profile
-      --resource-type string            Which resource you wish to generate
-      --terraform-binary-path string    Path to an existing Terraform binary (otherwise, one will be downloaded)
-      --terraform-install-path string   Path to an initialized Terraform working directory (default ".")
-  -t, --token string                    API Token
-  -v, --verbose                         Specify verbose output (same as setting log level to debug)
-  -z, --zone string                     Limit the export to a single zone ID
+  -a, --account string                      Target the provided account ID for the command
+  -c, --config string                       Path to config file (default "~/.cf-terraforming.yaml")
+  -e, --email string                        API Email address associated with your account
+  -h, --help                                help for cf-terraforming
+      --hostname string                     Hostname to use to query the API
+  -k, --key string                          API Key generated on the 'My Profile' page. See: https://dash.cloudflare.com/profile
+      --modern-import-block                 Whether to generate HCL import blocks for generated resources instead of terraform import compatible CLI commands. This is only compatible with Terraform 1.5+
+      --provider-registry-hostname string   Hostname to use for provider registry lookups (default "registry.terraform.io")
+      --resource-type string                Comma delimitered string of which resource(s) you wish to generate
+      --terraform-binary-path string        Path to an existing Terraform binary (otherwise, one will be downloaded)
+      --terraform-install-path string       Path to an initialized Terraform working directory (default ".")
+  -t, --token string                        API Token
+  -v, --verbose                             Specify verbose output (same as setting log level to debug)
+  -z, --zone string                         Target the provided zone ID for the command
 
 Use "cf-terraforming [command] --help" for more information about a command.
 ```
@@ -54,9 +59,9 @@ Cloudflare supports two authentication methods to the API:
 
 Both can be retrieved on the [user profile page](https://dash.cloudflare.com/profile/api-tokens).
 
-**A note on storing your credentials securely:** We recommend that you store
-your Cloudflare credentials (API key, email, token) as environment variables as
-demonstrated below.
+> [!TIP]
+> We recommend that you store your Cloudflare credentials (API key, email, token) as environment
+> variables as demonstrated below.
 
 ```bash
 # if using API Token
@@ -84,7 +89,7 @@ Alternatively, if using a config file, then specify the inputs using the same
 names the `flag` names. Example:
 
 ```
-$ cat ~/.cf-terraforming.yaml
+cat ~/.cf-terraforming.yaml
 email: "email@domain.com"
 key: "<key>"
 #or
@@ -94,7 +99,7 @@ token: "<token>"
 ## Example usage
 
 ```bash
-$ cf-terraforming generate \
+cf-terraforming generate \
   --zone $CLOUDFLARE_ZONE_ID \
   --resource-type "cloudflare_record"
 ```
@@ -123,41 +128,111 @@ resource "cloudflare_record" "terraform_managed_resource" {
 
 ## Installation
 
-If you use Homebrew on MacOS, you can run the following:
+### Homebrew
 
 ```bash
-$ brew tap cloudflare/cloudflare
-$ brew install --cask cloudflare/cloudflare/cf-terraforming
+brew tap cloudflare/cloudflare
+brew install cloudflare/cloudflare/cf-terraforming
+```
+
+> [!NOTE]
+> If you have installed an older version of `cf-terraforming` via Homebrew,
+> you may need to first uninstall `cf-terraforming` and then install it to
+> pick up the updated install process and address the signing/notarisation
+> issues.
+
+### Go
+
+```bash
+go install github.com/cloudflare/cf-terraforming/cmd/cf-terraforming@latest
 ```
 
 If you use another OS, you will need to download the release directly from
-[GitHub Releases](https://github.com/cloudflare/cf-terraforming/releases).
+[GitHub Releases](https://github.com/cloudflare/cf-terraforming/releases) or
+build the Go source.
 
 ## Importing with Terraform state
 
-`cf-terraforming` will output the `terraform import` compatible commands for you
-when you invoke the `import` command. This command assumes you have already ran
-`cf-terraforming generate ...` to output your resources.
+`cf-terraforming` has the ability to generate the configuration for you to import
+existing resources.
 
-In the future we aim to automate this however for now, it is a manual step to
-allow flexibility in directory structure.
+Depending on your version of Terraform, you can generate the `import` block
+(Terraform 1.5+) using the `--modern-import-block` flag or the `terraform import`
+compatible CLI output (all versions).
+
+This command assumes you have already ran `cf-terraforming generate ...` to
+output your resources.
 
 ```
-$ cf-terraforming import \
+# All versions of Terraform
+cf-terraforming import \
   --resource-type "cloudflare_record" \
   --email $CLOUDFLARE_EMAIL \
   --key $CLOUDFLARE_API_KEY \
   --zone $CLOUDFLARE_ZONE_ID
 ```
 
+```
+# Terraform 1.5+ only
+cf-terraforming import \
+  --resource-type "cloudflare_record" \
+  --modern-import-block \
+  --email $CLOUDFLARE_EMAIL \
+  --key $CLOUDFLARE_API_KEY \
+  --zone $CLOUDFLARE_ZONE_ID
+```
+
+## Using non-standard registries
+
+By default, we use the Hashicorp registry (registry.terraform.io) for looking up
+the provider to introspect the schema. If you are attempting to use another
+registry, you will need to provide the `--provider-registry-hostname` flag or
+`CLOUDFLARE_PROVIDER_REGISTRY_HOSTNAME` environment variable to query the correct
+registry.
+
+## Using non-standard Terraform binaries
+
+Internally, we use [`terraform-exec`](https://github.com/hashicorp/terraform-exec)
+library to run Terraform operations in the same way that the CLI tooling would.
+If a `terraform` binary is not available on your system path, we will attempt
+to download the latest to use it.
+
+Should you have the binary stored in a non-standard location, want to use an
+existing binary, or you wish to provide a Terraform compatible binary (such as
+`tofu`), you need to provide the `--terraform-binary-path` flag or
+`CLOUDFLARE_TERRAFORM_BINARY_PATH` environment variable to instruct
+`cf-terraforming` which you expect to use.
+
+## CDKTF
+
+If you'd like to use [cdktf](https://developer.hashicorp.com/terraform/cdktf)
+for your project resources, you can pipe the output from `cf-terraforming` into 
+`cdktf convert` in order to correctly generate CDKTF output automatically.
+
+Example:
+
+```
+cf-terraforming generate \
+  --resource-type "cloudflare_record" \
+  --zone "0da42c8d2132a9ddaf714f9e7c920711" \
+| cdktf convert --language "typescript" --provider "cloudflare/cloudflare"
+```
+
 ## Supported Resources
+
+### v5
+
+Any resource that is released within the Terraform Provider is automatically
+supported for generation. Import support is not yet implemented.
+
+### v4
 
 Any resources not listed are currently not supported.
 
 | Resource                                                                                                                                         | Resource Scope  | Generate Supported | Import Supported |
 | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- | ------------------ | ---------------- |
-| [cloudflare_access_application](https://www.terraform.io/docs/providers/cloudflare/r/access_application)                                         | Account         | ✅                 | ❌               |
-| [cloudflare_access_group](https://www.terraform.io/docs/providers/cloudflare/r/access_group)                                                     | Account         | ✅                 | ✅                |
+| [cloudflare_access_application](https://www.terraform.io/docs/providers/cloudflare/r/access_application)                                         | Account         | ✅                 | ✅               |
+| [cloudflare_access_group](https://www.terraform.io/docs/providers/cloudflare/r/access_group)                                                     | Account         | ✅                 | ✅               |
 | [cloudflare_access_identity_provider](https://www.terraform.io/docs/providers/cloudflare/r/access_identity_provider)                             | Account         | ✅                 | ❌               |
 | [cloudflare_access_mutual_tls_certificate](https://www.terraform.io/docs/providers/cloudflare/r/access_mutual_tls_certificate)                   | Account         | ✅                 | ❌               |
 | [cloudflare_access_policy](https://www.terraform.io/docs/providers/cloudflare/r/access_policy)                                                   | Account         | ❌                 | ❌               |
@@ -180,6 +255,7 @@ Any resources not listed are currently not supported.
 | [cloudflare_firewall_rule](https://www.terraform.io/docs/providers/cloudflare/r/firewall_rule)                                                   | Zone            | ✅                 | ✅               |
 | [cloudflare_healthcheck](https://www.terraform.io/docs/providers/cloudflare/r/healthcheck)                                                       | Zone            | ✅                 | ✅               |
 | [cloudflare_ip_list](https://www.terraform.io/docs/providers/cloudflare/r/ip_list)                                                               | Account         | ❌                 | ✅               |
+| [cloudflare_list](https://www.terraform.io/docs/providers/cloudflare/r/list)                                                                     | Account         | ✅                 | ❌               |
 | [cloudflare_load_balancer](https://www.terraform.io/docs/providers/cloudflare/r/load_balancer)                                                   | Zone            | ✅                 | ✅               |
 | [cloudflare_load_balancer_monitor](https://www.terraform.io/docs/providers/cloudflare/r/load_balancer_monitor)                                   | Account         | ✅                 | ✅               |
 | [cloudflare_load_balancer_pool](https://www.terraform.io/docs/providers/cloudflare/r/load_balancer_pool)                                         | Account         | ✅                 | ✅               |
@@ -194,6 +270,10 @@ Any resources not listed are currently not supported.
 | [cloudflare_ruleset](https://www.terraform.io/docs/providers/cloudflare/r/ruleset)                                                               | Account or Zone | ✅                 | ✅               |
 | [cloudflare_spectrum_application](https://www.terraform.io/docs/providers/cloudflare/r/spectrum_application)                                     | Zone            | ✅                 | ✅               |
 | [cloudflare_tiered_cache](https://www.terraform.io/docs/providers/cloudflare/r/tiered_cache)                                                     | Zone            | ✅                 | ❌               |
+| [cloudflare_teams_list](https://www.terraform.io/docs/providers/cloudflare/r/teams_list)                                                         | Account         | ✅                 | ✅               |
+| [cloudflare_teams_location](https://www.terraform.io/docs/providers/cloudflare/r/teams_location)                                                 | Account         | ✅                 | ✅               |
+| [cloudflare_teams_proxy_endpoint](https://www.terraform.io/docs/providers/cloudflare/r/teams_proxy_endpoint)                                     | Account         | ✅                 | ✅               |
+| [cloudflare_teams_rule](https://www.terraform.io/docs/providers/cloudflare/r/teams_rule)                                                         | Account         | ✅                 | ✅               |
 | [cloudflare_tunnel](https://www.terraform.io/docs/providers/cloudflare/r/tunnel)                                                                 | Account         | ✅                 | ✅               |
 | [cloudflare_turnstile_widget](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/turnstile_widget)              | Account         | ✅                 | ✅               |
 | [cloudflare_url_normalization_settings](https://www.terraform.io/docs/providers/cloudflare/r/url_normalization_settings)                         | Zone            | ✅                 | ❌               |
@@ -222,6 +302,41 @@ test. The Terraform files then allow us to build what the resource structure is
 expected to look like and once the tool parses the API response, we can compare
 that to the static file.
 
+Suggested local testing steps:
+
+1. Create a file with the basic provider configuration (do not commit this file)
+
+```bash
+cat > main.tf <<EOF
+terraform {
+  required_providers {
+    cloudflare = {
+      source = "cloudflare/cloudflare"
+      version = "~> 4"
+    }
+  }
+}
+EOF
+```
+
+2. Initialize terraform
+
+```bash
+terraform init
+```
+
+3. Run tests (Cloudflare Install path should be path to repository)
+
+```bash
+make test
+```
+
+If you want to run a specific test case you can do so with the TESTARGS variable and -run flag
+
+```bash
+TESTARGS="-run '^TestResourceGeneration/cloudflare_teams_list'" make test
+```
+
 ## Updating VCR cassettes
 
 Periodically, it is a good idea to recreate the VCR cassettes used in our
@@ -236,12 +351,14 @@ will need to:
   (`CLOUDFLARE_EMAIL`, `CLOUDFLARE_KEY`, `CLOUDFLARE_API_TOKEN`) and the test
   you want to update.
   Example of updating the DNS CAA record test with a zone I own:
-  ```bash
-  $ OVERWRITE_VCR_CASSETTES=true \
+
+```bash
+  OVERWRITE_VCR_CASSETTES=true \
     CLOUDFLARE_DOMAIN="terraform.cfapi.net" \
     CLOUDFLARE_EMAIL="jb@example.com" \
     CLOUDFLARE_API_KEY="..." \
     TESTARGS="-run '^TestResourceGeneration/cloudflare_record_caa'"  \
     make test
-  ```
+```
+
 - Commit your changes and push them via a Pull Request.

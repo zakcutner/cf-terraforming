@@ -9,8 +9,8 @@ import (
 )
 
 var log = logrus.New()
-var cfgFile, zoneID, hostname, apiEmail, apiKey, apiToken, accountID, terraformInstallPath, terraformBinaryPath string
-var verbose bool
+var cfgFile, zoneID, hostname, apiEmail, apiKey, apiToken, accountID, terraformInstallPath, terraformBinaryPath, providerRegistryHostname string
+var verbose, useModernImportBlock bool
 var api *cloudflare.API
 var terraformImportCmdPrefix = "terraform import"
 var terraformResourceNamePrefix = "terraform_managed_resource"
@@ -42,13 +42,12 @@ func init() {
 		return
 	}
 
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", home+"/.cf-terraforming.yaml", "Path to config file")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Specify verbose output (same as setting log level to debug)")
+	rootCmd.PersistentFlags().StringVar(&resourceType, "resource-type", "", "Comma delimitered string of which resource(s) you wish to generate")
+	rootCmd.PersistentFlags().BoolVarP(&useModernImportBlock, "modern-import-block", "", false, "Whether to generate HCL import blocks for generated resources instead of terraform import compatible CLI commands. This is only compatible with Terraform 1.5+")
 
-	// Zone selection
-	rootCmd.PersistentFlags().StringVarP(&zoneID, "zone", "z", "", "Limit the export to a single zone ID")
+	rootCmd.PersistentFlags().StringVarP(&zoneID, "zone", "z", "", "Target the provided zone ID for the command")
 	if err = viper.BindPFlag("zone", rootCmd.PersistentFlags().Lookup("zone")); err != nil {
 		log.Fatal(err)
 	}
@@ -56,8 +55,7 @@ func init() {
 		log.Fatal(err)
 	}
 
-	// Account
-	rootCmd.PersistentFlags().StringVarP(&accountID, "account", "a", "", "Use specific account ID for commands")
+	rootCmd.PersistentFlags().StringVarP(&accountID, "account", "a", "", "Target the provided account ID for the command")
 	if err = viper.BindPFlag("account", rootCmd.PersistentFlags().Lookup("account")); err != nil {
 		log.Fatal(err)
 	}
@@ -65,7 +63,6 @@ func init() {
 		log.Fatal(err)
 	}
 
-	// API credentials
 	rootCmd.PersistentFlags().StringVarP(&apiEmail, "email", "e", "", "API Email address associated with your account")
 	if err = viper.BindPFlag("email", rootCmd.PersistentFlags().Lookup("email")); err != nil {
 		log.Fatal(err)
@@ -98,24 +95,27 @@ func init() {
 		log.Fatal(err)
 	}
 
-	// Debug logging mode
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Specify verbose output (same as setting log level to debug)")
-
-	rootCmd.PersistentFlags().StringVar(&resourceType, "resource-type", "", "Which resource you wish to generate")
-
 	rootCmd.PersistentFlags().StringVar(&terraformInstallPath, "terraform-install-path", ".", "Path to an initialized Terraform working directory")
-
 	if err = viper.BindPFlag("terraform-install-path", rootCmd.PersistentFlags().Lookup("terraform-install-path")); err != nil {
+		log.Fatal(err)
+	}
+	if err = viper.BindEnv("terraform-install-path", "CLOUDFLARE_TERRAFORM_INSTALL_PATH"); err != nil {
 		log.Fatal(err)
 	}
 
 	rootCmd.PersistentFlags().StringVar(&terraformBinaryPath, "terraform-binary-path", "", "Path to an existing Terraform binary (otherwise, one will be downloaded)")
-
 	if err = viper.BindPFlag("terraform-binary-path", rootCmd.PersistentFlags().Lookup("terraform-binary-path")); err != nil {
 		log.Fatal(err)
 	}
+	if err = viper.BindEnv("terraform-binary-path", "CLOUDFLARE_TERRAFORM_BINARY_PATH"); err != nil {
+		log.Fatal(err)
+	}
 
-	if err = viper.BindEnv("terraform-install-path", "CLOUDFLARE_TERRAFORM_INSTALL_PATH"); err != nil {
+	rootCmd.PersistentFlags().StringVarP(&providerRegistryHostname, "provider-registry-hostname", "", "registry.terraform.io", "Hostname to use for provider registry lookups")
+	if err = viper.BindPFlag("provider-registry-hostname", rootCmd.PersistentFlags().Lookup("provider-registry-hostname")); err != nil {
+		log.Fatal(err)
+	}
+	if err = viper.BindEnv("provider-registry-hostname", "CLOUDFLARE_PROVIDER_REGISTRY_HOSTNAME"); err != nil {
 		log.Fatal(err)
 	}
 }
