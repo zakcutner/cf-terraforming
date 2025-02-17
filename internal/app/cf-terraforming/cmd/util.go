@@ -16,6 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/tidwall/gjson"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -240,15 +241,11 @@ func writeAttrLine(key string, value interface{}, parentName string, body *hclwr
 
 		ctyMap := make(map[string]cty.Value)
 		for _, v := range sortedKeys {
-			if hasNumber(v) {
-				ctyMap[fmt.Sprintf("%s", v)] = cty.StringVal(values[v].(string))
-			} else {
-				switch val := values[v].(type) {
-				case string:
-					ctyMap[v] = cty.StringVal(val)
-				case float64:
-					ctyMap[v] = cty.NumberFloatVal(val)
-				}
+			switch val := values[v].(type) {
+			case string:
+				ctyMap[v] = cty.StringVal(val)
+			case float64:
+				ctyMap[v] = cty.NumberFloatVal(val)
 			}
 		}
 		body.SetAttributeValue(key, cty.ObjectVal(ctyMap))
@@ -293,6 +290,8 @@ func writeAttrLine(key string, value interface{}, parentName string, body *hclwr
 				vals = append(vals, cty.StringVal(item))
 			}
 			body.SetAttributeValue(key, cty.ListVal(vals))
+		} else {
+			body.SetAttributeValue(key, cty.ListValEmpty(cty.String))
 		}
 	case string:
 		if parentName == "query" && key == "value" && value == "" {
@@ -311,4 +310,33 @@ func writeAttrLine(key string, value interface{}, parentName string, body *hclwr
 	default:
 		log.Debugf("got unknown attribute configuration: key %s, value %v, value type %T", key, value, value)
 	}
+}
+
+// boolToEnabledOrDisabled outputs a string representation of a boolean in the form of `enabled` or `disabled`.
+func boolToEnabledOrDisabled(value bool) string {
+	if value {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+// transformToCollection takes a JSON payload that is a singlular resource but
+// operates as a `list` endpoint and transforms it into a JSON to correctly
+// handle the output.
+func transformToCollection(value string) string {
+	return fmt.Sprintf("[%s]", value)
+}
+
+// modifyResponsePayload takes the current resource and the `gjson.Result`
+// to run arbitary modifications to the JSON before passing it to be overlayed
+// the provider schema.
+func modifyResponsePayload(resourceName string, value gjson.Result) string {
+	output := value.String()
+
+	switch resourceName {
+	case "cloudflare_zero_trust_organization":
+		output = transformToCollection(output)
+	}
+
+	return output
 }
